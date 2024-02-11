@@ -151,7 +151,7 @@ def capture_video():
             normalized_face = gray_face.astype('float32') / 255.0
             
             # Pré-processamento da imagem para o modelo de emoção
-            preprocessed_frame = normalized_face.reshape(1, 48, 48, 1)
+            preprocessed_frame = normalized_face.reshape(48, 48)
             
             # Aplicação do modelo para obter as previsões de emoção
             predicted_class = final_model_mlp.predict(preprocessed_frame).argmax()
