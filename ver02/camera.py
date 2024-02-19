@@ -77,21 +77,3 @@ st.title('Reconhecimento de Expressões Faciais')
 if st.button('Ativar Câmera'):
     capture_video()
 
-# Caixa de upload de arquivo
-uploaded_file = st.file_uploader("Escolha uma imagem...", type=["jpg", "jpeg", "png"])
-
-# Se o usuário fizer o upload de um arquivo
-if uploaded_file is not None:
-    # Carregar a imagem
-    image = Image.open(uploaded_file)
-    
-    # Exibir a imagem
-    st.image(image, caption='Imagem Carregada', use_column_width=True)
-    
-    # Botão para iniciar o reconhecimento facial
-    if st.button('Reconhecer Expressão Facial'):
-        # Realizar o reconhecimento facial
-        emotion = recognize_facial_expression(image)
-        
-        # Exibir o resultado do reconhecimento facial
-        st.success(f'A expressão facial identificada é: {emotion}')
