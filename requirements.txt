@@ -5,3 +5,4 @@ matplotlib
 scikit-learn
 opencv-python-headless
 streamlit
+mediapipe
