@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import load_model
 import tensorflow as tf
 from PIL import Image
 import streamlit as st
@@ -38,6 +39,22 @@ model_cnn = tf.keras.models.Sequential([
 
 # Compilando o modelo
 model_cnn.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+# Configurando o callback para salvar o melhor modelo durante o treinamento
+checkpoint_path = 'checkpoint/best_model_mlp.h5'
+call_back = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+                                               # Parâmetro monitor: qual métrica será monitorada
+                                                monitor='val_accuracy',
+                                                # Verbose: controla a quantidade de informações impressas durante o treinamento
+                                                verbose=1,
+                                                # Salva o modelo a cada época
+                                                save_freq='epoch',
+                                                # Parâmetro save_best_only: se True, o modelo é salvo quando a métrica monitorada é maximizada
+                                                save_best_only=True,
+                                                # determina se apenas os pesos do modelo devem ser salvos ou o modelo completo, FALSE significa completo
+                                                save_weights_only=False,
+                                                # Parâmetro mode: indica se a métrica monitorada deve ser maximizada ou minimizada
+                                                mode='max')
 
 # Treinamento do modelo
 model_cnn.fit(X_train, y_train, epochs=20, validation_split=0.1, callbacks=[call_back])

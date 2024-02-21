@@ -1,92 +1,72 @@
 import cv2
-import mediapipe as mp
+import numpy as np
 import streamlit as st
 from tensorflow.keras.models import load_model
-import numpy as np
+import mediapipe as mp
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+import time
 
-label_to_text = {0:'raiva', 1:'nojo', 2:'medo', 3:'feliz', 4:'triste', 5:'surpreso', 6:'neutro'}
-
-# Carregando o modelo treinado
+# Carregar o modelo treinado
 checkpoint_path = 'checkpoint/best_model_mlp.h5'
 final_model_mlp = load_model(checkpoint_path)
 
-# Função para detectar emoção em uma região facial
-def predict_emotion(face_roi):
-    # Redimensionar a região facial para o tamanho esperado pelo modelo
-    resized_face = cv2.resize(face_roi, (48, 48))
+label_to_text = {0: 'raiva', 1: 'nojo', 2: 'medo', 3: 'feliz', 4: 'triste', 5: 'surpreso', 6: 'neutro'}
+
+# Função para processar o frame de vídeo e fazer a previsão da emoção
+def predict_emotion(frame):
+    # Redimensionar o frame para o tamanho esperado pelo modelo
+    resized_frame = cv2.resize(frame, (48, 48))
     
-    # Converter a imagem para escala de cinza
-    gray_face = cv2.cvtColor(resized_face, cv2.COLOR_BGR2GRAY)
+    # Converter o frame para escala de cinza
+    gray_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
     
     # Normalizar os pixels da imagem
-    normalized_face = gray_face.astype('float32') / 255.0
+    normalized_frame = gray_frame.astype('float32') / 255.0
     
-    # Pré-processar a imagem para o modelo
-    preprocessed_face = normalized_face.reshape(1, 48, 48, 1)
+    # Pré-processar o frame para o modelo
+    preprocessed_frame = normalized_frame.reshape(1, 48, 48, 1)
     
     # Fazer a previsão
-    predicted_class = final_model_mlp.predict(preprocessed_face).argmax()
+    predicted_class = final_model_mlp.predict(preprocessed_frame).argmax()
     predicted_emotion = label_to_text[predicted_class]
     
     return predicted_emotion
 
-# Iniciar o mediapipe
-mp_face_detection = mp.solutions.face_detection
-mp_drawing = mp.solutions.drawing_utils
-face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.5)
+# Definir a classe do transformador de vídeo
+class VideoTransformer(VideoTransformerBase):
+    def __init__(self):
+        # Inicializar o modelo de detecção de rostos
+        self.face_detection = mp.solutions.face_detection.FaceDetection(min_detection_confidence=0.5)
+        
+    def transform(self, frame):
+        # Converter o frame para um array numpy
+        frame_bgr = np.array(frame.to_image())
 
-# Função para capturar o vídeo da câmera e realizar a detecção de rostos e emoções
-def capture_video():
-    # Iniciar a captura de vídeo
-    cap = cv2.VideoCapture(0)
-    
-    # Loop para capturar o vídeo
-    while cap.isOpened():
-        # Ler um frame do vídeo
-        ret, frame = cap.read()
-        if not ret:
-            break
+        # Converter de BGR para RGB
+        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         
-        # Converter o frame de BGR para RGB (mediapipe usa RGB)
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        # Detectar rostos no frame usando mediapipe
-        results = face_detection.process(rgb_frame)
-        
-        # Verificar se algum rosto foi detectado
+        # Detectar rostos no frame
+        results = self.face_detection.process(frame_rgb)
         if results.detections:
             for detection in results.detections:
                 bboxC = detection.location_data.relative_bounding_box
-                ih, iw, _ = frame.shape
-                bbox = int(bboxC.xmin * iw), int(bboxC.ymin * ih), \
-                       int(bboxC.width * iw), int(bboxC.height * ih)
-                
+                ih, iw, _ = frame_rgb.shape
+                x, y, w, h = int(bboxC.xmin * iw), int(bboxC.ymin * ih), \
+                             int(bboxC.width * iw), int(bboxC.height * ih)
+
                 # Recortar a região do rosto
-                face_roi = frame[bbox[1]:bbox[1] + bbox[3], bbox[0]:bbox[0] + bbox[2]]
+                face_roi = frame_rgb[y:y+h, x:x+w]
                 
-                # Fazer a previsão da emoção na região do rosto
+                # Fazer a previsão da emoção
                 predicted_emotion = predict_emotion(face_roi)
                 
-                # Desenhar um retângulo ao redor do rosto detectado
-                cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]), (0, 255, 0), 2)
-                
-                # Exibir a emoção detectada sobreposta ao retângulo
-                cv2.putText(frame, predicted_emotion, (bbox[0], bbox[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
+                # Desenhar a emoção detectada no frame
+                frame_rgb = cv2.putText(frame_rgb, predicted_emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
+                print(predicted_emotion)
         
-        # Exibir o vídeo com as detecções de rosto e emoções
-        cv2.imshow('Emotion Recognition', frame)
-        
-        # Pressione 'q' para sair do loop
-        if cv2.waitKey(10) & 0xFF == ord('q'):
-            break
-    
-    # Libere o objeto VideoCapture e feche a janela
-    cap.release()
-    cv2.destroyAllWindows()
+        return frame_rgb
 
 # Definir o título da página
 st.title('Reconhecimento de Expressões Faciais')
 
-# Adicionar um botão para ativar a câmera
-if st.button('Ativar Câmera'):
-    capture_video()
+webrtc_streamer(key="emotion-recognition-1", video_processor_factory=VideoTransformer)

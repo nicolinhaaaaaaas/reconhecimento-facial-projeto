@@ -6,3 +6,4 @@ scikit-learn
 opencv-python-headless
 streamlit
 mediapipe
+streamlit_webrtc
