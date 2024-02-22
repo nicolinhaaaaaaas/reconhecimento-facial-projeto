@@ -25,3 +25,5 @@ Link para download do dataset utilizado: [FER2013 Dataset](https://www.kaggle.co
 Para executar o programa, é necessário instalar as dependências listadas no arquivo "requirements.txt" e iniciar um ambiente virtual, como o "venv".
 
 Após isso, basta iniciar o Streamlit chamando o arquivo do aplicativo desejado no terminal. Por exemplo: `streamlit run cameraCNN.py`.
+
+Link para o sistema na cloud do Streamlit (não funcional, no momento): [Streamlit Projeto](https://reconhecimento-facial.streamlit.app/)
