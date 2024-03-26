@@ -4,10 +4,21 @@ import streamlit as st
 from tensorflow.keras.models import load_model
 import mediapipe as mp
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+from keras.models import model_from_json
+
+# Carregar a estrutura do modelo a partir do arquivo JSON
+#with open('emotion_model.json', 'r') as json_file:
+#    loaded_model_json = json_file.read()
+
+# Criar o modelo a partir da estrutura carregada
+#loaded_model = model_from_json(loaded_model_json)
+
+# Carregar os pesos do modelo
+#loaded_model.load_weights('emotion_model.h5')
 
 # Carregar o modelo treinado
-checkpoint_path = 'checkpointCNN/best_model_mlp.h5'
-final_model_mlp = load_model(checkpoint_path)
+checkpoint_path = 'modelo_cnn2.h5'
+loaded_model = load_model(checkpoint_path)
 
 label_to_text = {0: 'raiva', 1: 'nojo', 2: 'medo', 3: 'feliz', 4: 'triste', 5: 'surpreso', 6: 'neutro'}
 
@@ -26,7 +37,7 @@ def predict_emotion(frame):
     preprocessed_frame = normalized_frame.reshape(1, 48, 48, 1)
     
     # Fazer a previsão
-    predicted_class = final_model_mlp.predict(preprocessed_frame).argmax()
+    predicted_class = loaded_model.predict(preprocessed_frame).argmax()
     predicted_emotion = label_to_text[predicted_class]
     
     return predicted_emotion

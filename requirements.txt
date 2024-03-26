@@ -3,7 +3,9 @@ pandas
 tensorflow
 matplotlib
 scikit-learn
-opencv-python-headless
-streamlit
+opencv-contrib-python-headless
+streamlit~=0.87.0
 mediapipe
 streamlit_webrtc
+tensorflow-cpu
+keras~=2.4.3

@@ -1,125 +1,114 @@
-import cv2
 import numpy as np
+import cv2
 import streamlit as st
-from tensorflow.keras.models import load_model
-import mediapipe as mp
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+from tensorflow import keras
+from keras.models import model_from_json
+from keras.preprocessing.image import img_to_array
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, RTCConfiguration, VideoProcessorBase, WebRtcMode
 
-# Carregar o modelo treinado
-checkpoint_path = 'checkpointMLP/best_model_mlp.h5'
-final_model_mlp = load_model(checkpoint_path)
+# load model
+emotion_dict = {0:'angry', 1:'disgust', 2:'fear', 3 :'happy', 4: 'neutral', 5:'sad', 6: 'surprise'}
+# load json and create model
+json_file = open('emotion_model.json', 'r')
+loaded_model_json = json_file.read()
+json_file.close()
+classifier = model_from_json(loaded_model_json)
 
-label_to_text = {0: 'raiva', 1: 'nojo', 2: 'medo', 3: 'feliz', 4: 'triste', 5: 'surpreso', 6: 'neutro'}
+# load weights into new model
+classifier.load_weights("emotion_model.h5")
 
-# Função para processar o frame de vídeo e fazer a previsão da emoção
-def predict_emotion(frame):
-    # Redimensionar o frame para o tamanho esperado pelo modelo
-    resized_frame = cv2.resize(frame, (48, 48))
-    
-    # Converter o frame para escala de cinza
-    gray_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
-    
-    # Normalizar os pixels da imagem
-    normalized_frame = gray_frame.astype('float32') / 255.0
-    
-    # Pré-processar o frame para o modelo
-    preprocessed_frame = normalized_frame.reshape(1, 48, 48, 1)
-    
-    # Fazer a previsão
-    predicted_class = final_model_mlp.predict(preprocessed_frame).argmax()
-    predicted_emotion = label_to_text[predicted_class]
-    
-    return predicted_emotion
+#load face
+try:
+    face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+except Exception:
+    st.write("Error loading cascade classifiers")
 
-# Função para reconhecer expressão facial em uma imagem de rosto
-def recognize_facial_expression(face_image):
-    # Fazer a previsão da emoção
-    predicted_emotion = predict_emotion(face_image)
-    return predicted_emotion
+RTC_CONFIGURATION = RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
 
-# Função para redimensionar a imagem
-def resize_image(image, target_size):
-    # Converter a imagem em uma matriz numpy
-    np_image = np.array(image)
-    
-    # Redimensionar a imagem
-    resized_image = cv2.resize(np_image, target_size)
-    
-    return resized_image
-
-# Definir a classe do transformador de vídeo
-class VideoTransformer(VideoTransformerBase):
-    def __init__(self):
-        # Inicializar o modelo de detecção de rostos
-        self.face_detection = mp.solutions.face_detection.FaceDetection(min_detection_confidence=0.5)
-        
+class Faceemotion(VideoTransformerBase):
     def transform(self, frame):
-        # Converter o frame para um array numpy
-        frame_bgr = np.array(frame.to_image())
+        img = frame.to_ndarray(format="bgr24")
 
-        # Converter de BGR para RGB
-        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        
-        # Detectar rostos no frame
-        results = self.face_detection.process(frame_rgb)
-        if results.detections:
-            for detection in results.detections:
-                bboxC = detection.location_data.relative_bounding_box
-                ih, iw, _ = frame_rgb.shape
-                x, y, w, h = int(bboxC.xmin * iw), int(bboxC.ymin * ih), \
-                             int(bboxC.width * iw), int(bboxC.height * ih)
+        #image gray
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(
+            image=img_gray, scaleFactor=1.3, minNeighbors=5)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(img=img, pt1=(x, y), pt2=(
+                x + w, y + h), color=(255, 0, 0), thickness=2)
+            roi_gray = img_gray[y:y + h, x:x + w]
+            roi_gray = cv2.resize(roi_gray, (48, 48), interpolation=cv2.INTER_AREA)
+            if np.sum([roi_gray]) != 0:
+                roi = roi_gray.astype('float') / 255.0
+                roi = img_to_array(roi)
+                roi = np.expand_dims(roi, axis=0)
+                prediction = classifier.predict(roi)[0]
+                maxindex = int(np.argmax(prediction))
+                finalout = emotion_dict[maxindex]
+                output = str(finalout)
+            label_position = (x, y)
+            cv2.putText(img, output, label_position, cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-                # Recortar a região do rosto
-                face_roi = frame_rgb[y:y+h, x:x+w]
-                
-                # Reconhecer a expressão facial
-                predicted_emotion = recognize_facial_expression(face_roi)
-                
-                # Desenhar a emoção detectada no frame
-                frame_rgb = cv2.putText(frame_rgb, predicted_emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
-                print(predicted_emotion)
-        
-        return frame_rgb
+        return img
 
-# Definir o título da página
-st.title('Reconhecimento de Expressões Faciais')
+def main():
+    # Face Analysis Application #
+    st.title("Reconhecimento de Expressões Faciais em tempo real")
+    activiteis = ["Home", "Reconhecimento de face por Webcam", "About"]
+    choice = st.sidebar.selectbox("Escolher atividade", activiteis)
+    st.sidebar.markdown(
+        """ Desenolvido por:
+            Anabel Marinho Soares
+            Nicolas Emanuel Alves Costa
+            Thiago Luan Moreira Souza    
+              
+            [Github](https://github.com/ClassNeuralNetwork/Reconhecimento_de_expressoes)""")
+    if choice == "Home":
+        html_temp_home1 = """<div style="background-color:#6D7B8D;padding:10px">
+                                            <h4 style="color:white;text-align:center;">
+                                            Aplicativo de Detecção facial e Reconhecimento de Expressões Faciais<br>
+                                            Utilizando OpenCV, um modelo CNN próprio e o Streamlit</h4>
+                                            </div>
+                                            </br>"""
+        st.markdown(html_temp_home1, unsafe_allow_html=True)
+        st.write("""
+                 Esse aplicativo tem duas funcionalidades.
 
-# Breve descrição do projeto
-st.write("""
-## Reconhecimento Facial - Projeto
+                 1. Detecção de Faces em tempo real.
 
-Este projeto visa desenvolver um programa capaz de utilizar uma rede neural treinada para detectar expressões faciais nos rostos dos usuários por meio de suas câmeras. Usando um modelo de rede neural MLP. 
-""")
+                 2. Reconhecimento de emoções/expressões faciais.
 
-# Iniciar o streamlit webrtc
-webrtc_streamer(key="emotion-recognition-1", video_processor_factory=VideoTransformer)
+                 """)
+    elif choice == "Reconhecimento de face por Webcam":
+        st.header("Webcam ao vivo")
+        st.write("Clique no START para ativar a detecção de face e reconhecimento de emoções")
+        webrtc_streamer(key="example", mode=WebRtcMode.SENDRECV, rtc_configuration=RTC_CONFIGURATION,
+                        video_processor_factory=Faceemotion)
 
-# Carregar a imagem enviada pelo usuário
-uploaded_file = st.file_uploader("Enviar uma foto do rosto", type=['jpg', 'png', 'jpeg'])
+    elif choice == "About":
+        st.subheader("Sobre esse app")
+        html_temp_about1= """<div style="background-color:#6D7B8D;padding:10px">
+                                    <h4 style="color:white;text-align:center;">
+                                    Aplicativo de Detecção facial e Reconhecimento de Expressões Faciais<br>
+                                    Utilizando OpenCV, um modelo CNN próprio e o Streamlit</h4>
+                                    </div>
+                                    </br>"""
+        st.markdown(html_temp_about1, unsafe_allow_html=True)
 
-# Verificar se um arquivo foi enviado
-if uploaded_file is not None:
-    # Ler a imagem
-    image_bytes = uploaded_file.getvalue()
-    image_array = np.frombuffer(image_bytes, np.uint8)
-    image = cv2.imdecode(image_array, cv2.IMREAD_UNCHANGED)
-    
-    # Redimensionar a imagem para o tamanho esperado
-    resized_image = resize_image(image, (48, 48))
-    
-    # Exibir a imagem redimensionada
-    st.image(uploaded_file, caption='Imagem redimensionada', use_column_width=True)
+        html_temp4 = """
+                             		<div style="background-color:#98AFC7;padding:10px">
+                             		<h4 style="color:white;text-align:center;">Este aplicativo foi desenvolvido como projeto para a disciplina de Tópicos Especiais de Engenharia de Software (Redes Neurais). (2023.2) </h4>
+                             		<h4 style="color:white;text-align:center;">Obrigado por utilizar</h4>
+                             		</div>
+                             		<br></br>
+                             		<br></br>"""
 
-    # Fazer a previsão da emoção
-    predicted_emotion = recognize_facial_expression(resized_image)
-    st.write(f'Expressão facial detectada: {predicted_emotion}')
+        st.markdown(html_temp4, unsafe_allow_html=True)
 
-# Integrantes do projeto
-st.write("""
-## Integrantes
+    else:
+        pass
 
-- Anabel Marinho Soares
-- Nicolas Emanuel Alves Costa
-- Thiago Luan Moreira Sousa
-""")
+
+if __name__ == "__main__":
+    main()
 
