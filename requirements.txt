@@ -8,4 +8,4 @@ streamlit~=0.87.0
 mediapipe
 streamlit_webrtc
 tensorflow-cpu
-keras~=2.4.3
+keras~=2.12.0
